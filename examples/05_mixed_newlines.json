@@ -1,0 +1,13 @@
+{
+  "name": "05 混合换行 CR/LF/CRLF（含半 CRLF 标签）",
+  "original": "银行\r\n业务\n清单\r一",
+  "revised": "银行\r\n业务\n清单\r二",
+  "labels": {
+    "labels": [
+      { "id": "L1", "start": 0, "end": 2 },
+      { "id": "L2", "start": 2, "end": 3 },
+      { "id": "L3", "start": 10, "end": 11 }
+    ]
+  },
+  "expect": "原文混用 CRLF、LF、CR 三种换行；L2 只覆盖 CRLF 的 CR 半个码点，预览里 CRLF 徽章仅 CR 一侧高亮。网页编辑器把每个换行码点可视化、可单独切换；只改标签或部分正文时，未编辑字符与换行形式原样保存"
+}

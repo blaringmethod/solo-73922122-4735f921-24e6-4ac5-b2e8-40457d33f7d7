@@ -1,0 +1,12 @@
+{
+  "name": "ocr-label-migrator-web-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "前端换行码点编辑器的纯逻辑与 DOM 集成测试（Node 原生 assert + jsdom，无打包步骤）",
+  "scripts": {
+    "test": "node tests/js/test_editor_core.js && node tests/js/test_preview_core.js && node tests/js/test_editor_dom.js && node tests/js/test_app_page.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

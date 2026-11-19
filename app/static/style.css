@@ -9,6 +9,12 @@
   --warn: #b45309;
   --bad: #b91c1c;
   --mark: #fde68a;
+  --crlf: #1d4ed8;
+  --crlf-bg: #dbeafe;
+  --lf: #047857;
+  --lf-bg: #d1fae5;
+  --cr: #b45309;
+  --cr-bg: #fef3c7;
 }
 * { box-sizing: border-box; }
 body {
@@ -80,6 +86,85 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .banner.error { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
 .hidden { display: none !important; }
 
+/* ---------------- 换行码点编辑器 ---------------- */
+.nl-legend { margin-bottom: 10px; line-height: 1.9; }
+.nl-editor { margin-top: 5px; }
+.nl-surface {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.nl-backdrop,
+.nl-textarea {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: normal;
+  tab-size: 4;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  margin: 0;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
+}
+.nl-backdrop {
+  position: absolute;
+  inset: 0;
+  background: transparent;   /* 透明：让下层 textarea 的选区高亮与光标透出 */
+  color: var(--ink);
+  pointer-events: none;   /* 容器穿透，徽章单独打开 pointer-events */
+  z-index: 2;
+  overflow: hidden;       /* 滚动由 textarea 负责，这里只做镜像 */
+}
+.nl-backdrop .nl-line { display: block; min-height: 1.55em; }
+.nl-textarea {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--ink);
+  resize: vertical;
+  width: 100%;
+  overflow: auto;
+}
+.nl-textarea::selection { background: rgba(37, 99, 235, .22); color: transparent; }
+.nl-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  padding: 0 3px;
+  margin: 0 1px;
+  font-weight: 700;
+  font-size: .92em;
+  line-height: 1.35;
+  vertical-align: baseline;
+  cursor: default;
+}
+.nl-backdrop .nl-mark { pointer-events: auto; cursor: pointer; }
+.nl-mark .nl-glyph { pointer-events: none; }
+.nl-crlf { color: var(--crlf); background: var(--crlf-bg); border: 1px solid #93c5fd; }
+.nl-lf   { color: var(--lf);   background: var(--lf-bg);   border: 1px solid #6ee7b7; }
+.nl-cr   { color: var(--cr);   background: var(--cr-bg);   border: 1px solid #fcd34d; }
+.nl-mark.nl-half { outline: 2px dashed var(--bad); outline-offset: 1px; }
+.nl-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.nl-tools { display: inline-flex; gap: 6px; }
+.nl-tools button { padding: 3px 10px; font-size: 12px; border-radius: 5px; }
+.nl-selrange { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
+.nl-stats.nl-over { color: var(--bad); font-weight: 700; }
+
+/* ---------------- 标签卡片与落点预览 ---------------- */
 .label-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -99,23 +184,40 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   background: #f1f5f9;
   border-radius: 4px;
   padding: 1px 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .choices { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .choice-item {
   display: flex; gap: 8px; align-items: baseline;
   font-size: 13px; padding: 4px 6px; border-radius: 6px;
+  flex-wrap: wrap;
 }
 .choice-item:hover { background: #f8fafc; }
-.preview {
+.nl-preview {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 12.5px;
+  margin: 2px 0 0;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  white-space: pre-wrap;
   word-break: break-all;
+  line-height: 1.7;
 }
-.preview mark { background: var(--mark); padding: 0 1px; border-radius: 2px; }
+.nl-preview mark,
+.nl-preview .nl-mark mark {
+  background: var(--mark);
+  padding: 0 1px;
+  border-radius: 2px;
+  color: inherit;
+}
 .pos-tag { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .impossible-note { color: var(--bad); font-size: 13px; margin-top: 6px; }
 #result-preview {
   background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px;
   font-size: 12px; overflow: auto; max-height: 320px;
+  white-space: pre;
 }
 footer { text-align: center; padding: 0 16px 30px; }

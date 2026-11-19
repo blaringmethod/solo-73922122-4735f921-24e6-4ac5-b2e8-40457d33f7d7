@@ -27,15 +27,21 @@
       <button id="load-example" type="button">填入示例</button>
       <span class="hint">每段文本 ≤ 120 个码点；标签 ≤ 10 个、非空、互不重叠，区间为码点左闭右开。</span>
     </div>
+    <div class="nl-legend hint">
+      换行码点逐个可见、可点切换：
+      <span class="nl-mark nl-crlf"><span class="nl-glyph">⏎</span></span> CRLF（\r\n，两个码点）
+      <span class="nl-mark nl-lf"><span class="nl-glyph">␊</span></span> LF（\n）
+      <span class="nl-mark nl-cr"><span class="nl-glyph">␍</span></span> CR（\r）。
+      也可把光标放到换行处，用编辑器下方“转 CRLF / LF / CR”按钮；
+      粘贴内容里的每种换行形式都会原样保留。
+    </div>
     <label class="field">原文（OCR 结果）
-      <textarea id="original" rows="3" maxlength="400"
-        placeholder="原始 OCR 文本"></textarea>
-      <span class="count" id="original-count"></span>
+      <textarea id="original" rows="4"
+        placeholder="原始 OCR 文本（可混用 CR、LF、CRLF）"></textarea>
     </label>
     <label class="field">修订文
-      <textarea id="revised" rows="3" maxlength="400"
-        placeholder="人工修订后的文本"></textarea>
-      <span class="count" id="revised-count"></span>
+      <textarea id="revised" rows="4"
+        placeholder="人工修订后的文本（可混用 CR、LF、CRLF）"></textarea>
     </label>
     <label class="field">标签 JSON（基于原文的码点区间）
       <textarea id="labels" rows="4" spellcheck="false"
@@ -66,9 +72,13 @@
 </main>
 
 <footer>
-  <span class="hint">在另一窗口修改任一输入后，本页的旧选择与在途确认会被服务端拒绝；改回原文也不会恢复。</span>
+  <span class="hint">在另一窗口修改任一输入后，本页的旧选择与在途确认会被服务端拒绝；改回原文也不会恢复。
+    正文里的 CR / LF / CRLF 按码点原样保存：只改标签或部分正文时，未编辑字符与换行形式不变。</span>
 </footer>
 
+<script src="/static/editor-core.js"></script>
+<script src="/static/editor.js"></script>
+<script src="/static/preview-core.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

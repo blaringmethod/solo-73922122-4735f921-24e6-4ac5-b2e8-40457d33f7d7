@@ -25,6 +25,17 @@ const EXAMPLES = [
     original: "abab",
     revised: "ab",
     labels: { labels: [{ id: "x", start: 0, end: 2 }, { id: "y", start: 2, end: 4 }] }
+  },
+  {
+    // CR / LF / CRLF 混用；标签 L2 只覆盖 CRLF 的一半（CR 码点）
+    name: "05 混合换行 CR/LF/CRLF（含半 CRLF 标签）",
+    original: "银行\r\n业务\n清单\r一",
+    revised: "银行\r\n业务\n清单\r二",
+    labels: { labels: [
+      { id: "L1", start: 0, end: 2 },
+      { id: "L2", start: 2, end: 3 },
+      { id: "L3", start: 10, end: 11 }
+    ] }
   }
 ];
 
@@ -35,13 +46,17 @@ const state = {
   analysis: null,
   selections: {},   // label_id -> {choice:'position',position} | {choice:'discard'}
   confirmed: false,
+  original: "",     // 服务端回传的原样原文（预览按它的码点定位，不读 textarea）
+  revised: "",
   pollTimer: null,
 };
 
 const $ = (id) => document.getElementById(id);
-const cps = (s) => Array.from(s);            // 按码点切分，避免代理对错位
 const esc = (s) => s.replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+let origEditor = null;
+let revEditor = null;
 
 /* ---------- 提示条 ---------- */
 function showBanner(msg, isError = false) {
@@ -78,8 +93,7 @@ function detailMessage(data) {
 
 /* ---------- 输入区 ---------- */
 function updateCounts() {
-  $("original-count").textContent = cps($("original").value).length + " / 120 码点";
-  $("revised-count").textContent = cps($("revised").value).length + " / 120 码点";
+  // 两个正文编辑器的码点统计由各自工具栏显示（按待保存的原样文本）。
   let msg = "";
   try {
     const v = JSON.parse($("labels").value);
@@ -91,8 +105,8 @@ function updateCounts() {
 
 function fillExample(i) {
   const ex = EXAMPLES[i];
-  $("original").value = ex.original;
-  $("revised").value = ex.revised;
+  origEditor.setRaw(ex.original);
+  revEditor.setRaw(ex.revised);
   $("labels").value = JSON.stringify(ex.labels, null, 2);
   updateCounts();
 }
@@ -102,9 +116,10 @@ async function saveInputs() {
   let labels;
   try { labels = JSON.parse($("labels").value || "[]"); }
   catch (e) { showBanner("标签 JSON 解析失败：" + e.message, true); return; }
+  // 直接取编辑器维护的原样文本，CR/LF/CRLF 与每个未编辑码点都不经过 textarea 规范化
   const body = JSON.stringify({
-    original: $("original").value,
-    revised: $("revised").value,
+    original: origEditor.getRaw(),
+    revised: revEditor.getRaw(),
     labels,
   });
   $("save-status").textContent = "保存中…";
@@ -125,14 +140,8 @@ async function saveInputs() {
   }
 }
 
-/* ---------- 渲染 ---------- */
-function spanPreview(text, start, end) {
-  const arr = cps(text);
-  const before = arr.slice(0, start).join("");
-  const mid = arr.slice(start, end).join("");
-  const after = arr.slice(end).join("");
-  return esc(before) + "<mark>" + esc(mid) + "</mark>" + esc(after);
-}
+/* ---------- 渲染：按原样码点渲染文本，换行码点可见、半 CRLF 可辨 ---------- */
+const tokenPreview = window.PreviewCore.tokenPreview;
 
 function renderAnalysis() {
   const box = $("label-cards");
@@ -149,7 +158,9 @@ function renderAnalysis() {
     `待选择 ${a.labels.filter(l => l.status === "choice").length}，` +
     `无法保留 ${a.labels.filter(l => l.status === "impossible").length}。`;
 
-  const revised = $("revised").value;
+  // 预览与高亮一律按服务端原样文本（raw 码点）定位，不读 textarea 的规范化值
+  const original = state.original;
+  const revised = state.revised;
   for (const lab of a.labels) {
     const card = document.createElement("div");
     card.className = "label-card";
@@ -159,7 +170,7 @@ function renderAnalysis() {
     let html = `<div class="label-head">
       <span class="lid">${esc(lab.id)}</span>
       <span class="span">原文 [${lab.start}, ${lab.end})</span>
-      <span class="src-text">${esc(lab.text)}</span>
+      <pre class="nl-preview src-text">${tokenPreview(original, lab.start, lab.end)}</pre>
       <span class="badge ${lab.status}">${badgeText}</span>
     </div>`;
 
@@ -169,7 +180,7 @@ function renderAnalysis() {
         <label class="choice-item">
           <input type="radio" name="sel-${esc(lab.id)}" value="keep" checked>
           <span class="pos-tag">迁至 [${p}, ${p + L})</span>
-          <span class="preview">${spanPreview(revised, p, p + L)}</span>
+          <pre class="nl-preview">${tokenPreview(revised, p, p + L)}</pre>
         </label>
         <label class="choice-item">
           <input type="radio" name="sel-${esc(lab.id)}" value="discard">
@@ -184,7 +195,7 @@ function renderAnalysis() {
         <label class="choice-item">
           <input type="radio" name="sel-${esc(lab.id)}" value="${p}">
           <span class="pos-tag">迁至 [${p}, ${p + L})</span>
-          <span class="preview">${spanPreview(revised, p, p + L)}</span>
+          <pre class="nl-preview">${tokenPreview(revised, p, p + L)}</pre>
         </label>`).join("") + `
         <label class="choice-item">
           <input type="radio" name="sel-${esc(lab.id)}" value="discard">
@@ -228,11 +239,14 @@ function applyState(st, fromServer) {
   state.analysis = st.analysis;
   state.selections = st.selections || {};
   state.confirmed = st.has_result;
+  state.original = st.original;
+  state.revised = st.revised;
   $("session-info").textContent = "会话 " + st.session_id.slice(0, 8) + "…";
   $("revision-info").textContent = "版本 r" + st.revision;
   if (fromServer) {
-    $("original").value = st.original;
-    $("revised").value = st.revised;
+    // 服务端回传的是原样文本：setRaw 会重建换行映射，CR/LF/CRLF 不经过 textarea 规范化
+    origEditor.setRaw(st.original);
+    revEditor.setRaw(st.revised);
     $("labels").value = JSON.stringify({ labels: st.labels }, null, 2);
     updateCounts();
   }
@@ -312,6 +326,13 @@ async function poll() {
 
 /* ---------- 启动 ---------- */
 function init() {
+  // 换行码点编辑器接管两个正文 textarea；标签 JSON 仍为普通 textarea
+  origEditor = new NLEditor($("original"), () => {});
+  revEditor = new NLEditor($("revised"), () => {});
+  // 暴露到 window 便于控制台调试与页面集成测试
+  window.origEditor = origEditor;
+  window.revEditor = revEditor;
+
   const sel = $("example-select");
   EXAMPLES.forEach((ex, i) => {
     const opt = document.createElement("option");
@@ -320,8 +341,7 @@ function init() {
     sel.appendChild(opt);
   });
   $("load-example").addEventListener("click", () => fillExample(Number(sel.value)));
-  ["original", "revised", "labels"].forEach((id) =>
-    $(id).addEventListener("input", updateCounts));
+  $("labels").addEventListener("input", updateCounts);
   $("save").addEventListener("click", saveInputs);
   $("confirm").addEventListener("click", confirmAll);
   updateCounts();

@@ -27,8 +27,29 @@ uvicorn app.main:app --reload --port 8000
 
 ```bash
 pip install -r requirements-dev.txt
-pytest tests/ -q
+pytest tests/ -q                      # Python：单元、API、暴力对照、换行端到端
+npm install && npm test               # Node：换行编辑器纯逻辑 + jsdom 页面集成
 ```
+
+## 换行码点（CR / LF / CRLF）的处理
+
+OCR 文本可能混用三种换行：`\r`（CR）、`\n`（LF）、`\r\n`（CRLF，两个码点）。
+HTML `<textarea>` 按规范会把 CR/CRLF 一律规范化成 LF，直接保存会静默丢掉 CR，
+进而导致重开会话后标签落点错位一位。本工具的约定与实现：
+
+- **服务端原样保存**：正文按 Unicode 码点存储与计数（Python `len(str)`），
+  CR、LF 各自独立计数，CRLF 是两个码点；标签区间始终是原样文本的
+  左闭右开码点区间，允许只覆盖 CRLF 的一半（单独的 CR 或 LF 码点）。
+- **前端换行码点编辑器**：原生 `<textarea>` 只负责打字/粘贴/IME，其上方
+  透明渲染层把每个换行画成可见徽章（⏎ CRLF / ␊ LF / ␍ CR）。点击徽章或用
+  工具栏按钮可在三种形式间单独转换；textarea 的规范化值与原样文本之间用
+  LCS 差异同步——改动块之外的码点（含换行形式）原样保留，回车新增的换行
+  先以 LF 进入，再按需转换。粘贴文本的换行形式同样保留。
+- **计数与定位**：编辑器工具栏的码点计数反映**待保存的原样文本**；
+  标签校验、落点高亮、下载 JSON 全部按原样文本的码点定位。标签只覆盖
+  CRLF 一半时，徽章用虚线描边且仅高亮被覆盖的那一半（CR 或 LF）。
+- **失败安全**：输入校验失败（400）不会推进 `revision`，当前会话、已存
+  选择与此前确认成功的下载都保持可用；浏览器里未保存的编辑也不会被清空。
 
 ## 使用流程
 
@@ -71,8 +92,9 @@ pytest tests/ -q
 | `02_repeat_choice.json` | `abcabcabc → abcabc` | 中间那段 `abc` 可落在 `[0,3)` 或 `[3,6)`，需选择 |
 | `03_impossible.json` | `银行 → 银号` | 原跨度字符被替换，无法保留，只能丢弃 |
 | `04_conflict.json` | `abab → ab` 两个 `ab` 标签 | 各自唯一落点都是 `[0,2)`，同一对齐不可兼得，确认报冲突 |
+| `05_mixed_newlines.json` | 混用 CRLF/LF/CR，含半 CRLF 标签 | 三种换行按码点原样保存；只覆盖 CR 半个码点的标签可迁移，徽章仅高亮 CR 一侧 |
 
-网页左上角"示例"下拉可一键填入这四组数据。
+网页左上角"示例"下拉可一键填入这五组数据。
 
 ## 算法说明
 
@@ -110,12 +132,17 @@ pytest tests/ -q
 
 ```
 app/
-  alignment.py   # 最小编辑距离、落点集合、对齐计数、联合一致性
-  main.py        # FastAPI 路由与确认事务
-  db.py          # SQLite（sessions / selections / results）
-  schemas.py     # 输入校验
-  static/        # 单页网页（原生 JS）
-tests/           # 单元、API、暴力对照测试
-examples/        # 四组示例（含重复文字）
-Dockerfile  docker-compose.yml  requirements*.txt
+  alignment.py       # 最小编辑距离、落点集合、对齐计数、联合一致性
+  main.py            # FastAPI 路由与确认事务
+  db.py              # SQLite（sessions / selections / results）
+  schemas.py         # 输入校验
+  static/            # 单页网页（原生 JS）
+    editor-core.js   # 换行编辑器纯逻辑：规范化映射、LCS 同步、码点定位
+    editor.js        # 换行编辑器 DOM 层：透明 textarea + 换行徽章渲染
+    app.js  index.html  style.css
+tests/
+  test_*.py          # 单元、API、暴力对照、CR/LF/CRLF 端到端（pytest）
+  js/                # 编辑器纯逻辑与 jsdom 页面集成（node，无浏览器依赖）
+examples/            # 五组示例（含混合换行）
+Dockerfile  docker-compose.yml  requirements*.txt  package.json
 ```
